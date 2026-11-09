@@ -1,16 +1,16 @@
 {
-  "name": "BandSync Demo Portal",
-  "short_name": "BandSync Demo",
+  "name": "GigRelay Demo Portal",
+  "short_name": "GigRelay Demo",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "background_color": "#05080d",
-  "theme_color": "#07111d",
+  "theme_color": "#100b1b",
   "icons": [
     {
-      "src": "https://cdn.openart.ai/openart-uploads/production/attachment-transfers/a794e8f22b5bfc5bccb374a858e18a5e80b8fb2cc6609b5f07d03051a39f864b.png",
+      "src": "assets/gigrelay-app-icon.svg",
       "sizes": "any",
-      "type": "image/png",
+      "type": "image/svg+xml",
       "purpose": "any maskable"
     }
   ]
