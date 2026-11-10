@@ -35,13 +35,69 @@ function localDate(d){return /^\d{4}-\d{2}-\d{2}$/.test(d)&&!Number.isNaN(Date.p
 function escapeHtml(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function load(){try{return JSON.parse(localStorage.getItem(KEY)||"[]")}catch{return []}}
 function render(){const out=$("samples");const items=load();out.innerHTML=items.length?items.map(e=>'<article class="result">'+(e.image?'<img src="'+e.image+'" alt="Uploaded sample flyer">':"")+'<b>'+escapeHtml(e.date)+' — '+escapeHtml(e.venue)+'</b><p>'+escapeHtml([e.start,e.end].filter(Boolean).join(" – "))+'<br>'+escapeHtml(e.location)+'</p><p class="muted">'+escapeHtml(e.notes)+'</p><div style="clear:both"></div></article>').join(""):'<p class="muted">No sample gigs yet.</p>'}
-function guess(text){const t=text.replace(/\s+/g," ").trim();if(!t)return;
-const date=t.match(/\b(20\d{2})[-\/.](\d{1,2})[-\/.](\d{1,2})\b/)||null;
-if(date&&!$("date").value)$("date").value=date[1]+"-"+date[2].padStart(2,"0")+"-"+date[3].padStart(2,"0");
-const times=[...t.matchAll(/\b(?:1[0-2]|0?[1-9])(?::[0-5]\d)?\s*(?:AM|PM)\b/gi)].map(m=>m[0].toUpperCase().replace(/^(\d{1,2})(\s*AM|\s*PM)$/,"$1:00$2").replace(/\s*(AM|PM)$/," $1"));
-if(times[0]&&!$("start").value)$("start").value=times[0];
-if(times[1]&&!$("end").value)$("end").value=times[1];
-message("Text-based suggestions added where recognizable. Please check date, venue, times and location yourself.");
+function guess(text){
+ const lines=String(text||"").split(/\r?\n/).map(s=>s.trim().replace(/\s+/g," ")).filter(Boolean);
+ const t=lines.join(" ");
+ if(!t){message("No recognized text available for suggestions.");return}
+ const filled=[],unresolved=[];
+ function put(id,value,label){if(value&&!$(id).value.trim()){$(id).value=value;filled.push(label)}}
+ const pad=n=>String(n).padStart(2,"0");
+ const iso=(year,month,day)=>{
+   const y=Number(year),m=Number(month),d=Number(day);
+   if(y<2020||y>2100||m<1||m>12||d<1||d>31)return "";
+   const check=new Date(Date.UTC(y,m-1,d));
+   return check.getUTCFullYear()===y&&check.getUTCMonth()+1===m&&check.getUTCDate()===d ? [y,pad(m),pad(d)].join("-") : "";
+ };
+ const numeric=t.match(/\b(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})\b/)||
+   t.match(/\b(\d{1,2})[-/.](\d{1,2})[-/.](20\d{2})\b/);
+ if(numeric){
+   const first=numeric[1].length===4;
+   put("date",first?iso(numeric[1],numeric[2],numeric[3]):iso(numeric[3],numeric[1],numeric[2]),"date");
+ }
+ const monthNames={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+ const monthRegex=/(?:\b(january|february|march|april|may|june|july|august|september|sept|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:\s*,?\s*(20\d{2}))?\b)|(?:\b(\d{1,2})(?:st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|sept|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\.?(?:\s*,?\s*(20\d{2}))?\b)/i;
+ const monthMatch=t.match(monthRegex);
+ if(!$("date").value&&monthMatch){
+   const name=(monthMatch[1]||monthMatch[5]).toLowerCase().slice(0,3);
+   const day=monthMatch[2]||monthMatch[4],year=monthMatch[3]||monthMatch[6];
+   if(year)put("date",iso(year,monthNames[name],day),"date");
+   else unresolved.push("date year");
+ }
+ if(!$("date").value&&/\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\w*\b/i.test(t)&&!unresolved.includes("date year"))unresolved.push("date");
+ const clock=/\b(1[0-2]|0?[1-9])(?::([0-5]\d))?\s*(A\.?M\.?|P\.?M\.?)\b/gi;
+ const hits=[...t.matchAll(clock)].map(m=>{
+   const ap=m[3].replace(/\./g,"").toUpperCase(),time=String(Number(m[1]))+":"+String(m[2]||"00")+" "+ap;
+   return {time,index:m.index};
+ });
+ if(hits.length){
+   // Only use explicitly labeled performance times when present.
+   const performance=lines.find(l=>/\b(?:performance|showtime|show time|on stage|hit time|band starts|music starts)\b/i.test(l));
+   const matches=performance?[...performance.matchAll(clock)].map(m=>String(Number(m[1]))+":"+String(m[2]||"00")+" "+m[3].replace(/\./g,"").toUpperCase()):[];
+   const times=matches.length?matches:hits.map(x=>x.time);
+   put("start",times[0],"start time");
+   if(times.length>1)put("end",times[1],"end time");
+   if(!matches.length)unresolved.push("whether times are event hours or performance hours");
+ }
+ const addressPattern=/\b\d{1,6}\s+(?:[A-Za-z0-9.'-]+\s+){1,7}(?:St(?:reet)?|Ave(?:nue)?|Rd|Road|Blvd|Boulevard|Dr(?:ive)?|Ln|Lane|Way|Pkwy|Parkway|Pl(?:ace)?|Ct|Court|Hwy|Highway|Circle|Cir|Terrace|Ter)\b\.?(?:[^\n]{0,85})/i;
+ const addressLine=lines.find(l=>addressPattern.test(l))||"";
+ if(addressLine)put("location",addressLine.match(addressPattern)[0].trim(),"address");
+ else{
+   const labeledLocation=lines.find(l=>/^(?:address|location)\s*[:\-]/i.test(l));
+   if(labeledLocation)put("location",labeledLocation.replace(/^(?:address|location)\s*[:\-]\s*/i,""),"location");
+ }
+ const labeledVenue=lines.find(l=>/^(?:venue|location|where)\s*[:\-]/i.test(l) && !/\d{1,6}\s+[A-Za-z]/.test(l));
+ if(labeledVenue)put("venue",labeledVenue.replace(/^(?:venue|location|where)\s*[:\-]\s*/i,"").trim(),"venue");
+ if(!$("venue").value){
+   const atLine=lines.find(l=>/^@[\s]+[A-Za-z]/.test(l)||/\b(?:live at|performing at|at the)\s+[A-Za-z]/i.test(l));
+   if(atLine){
+     const candidate=atLine.match(/(?:^@\s*|\b(?:live at|performing at|at the)\s+)([^,|•]+?)(?:\s+[–—-]\s+|$)/i)?.[1]?.trim();
+     if(candidate&&candidate.length>=3&&candidate.length<=75&&!/\b(?:presents|doors|admission|tickets|pm|am)\b/i.test(candidate))put("venue",candidate,"venue");
+   }
+ }
+ if(!$("venue").value)unresolved.push("venue");
+ if(!$("location").value)unresolved.push("address");
+ const note="Suggested: "+(filled.length?filled.join(", "):"no confident fields")+"."+(unresolved.length?" Please verify "+[...new Set(unresolved)].join(", ")+".":"")+" Review all information before publishing.";
+ message(note);
 }
 $("flyer").addEventListener("change",()=>{
 const file=$("flyer").files?.[0];selected=null;dataUrl="";$("preview").style.display="none";$("read").disabled=true;$("skip").disabled=true;
