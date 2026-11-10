@@ -3,7 +3,7 @@
 <style>
 :root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color-scheme:dark;--purple:#ad53f0;--edge:#354058;--muted:#a3b2c7;--bg:#080912}
 *{box-sizing:border-box}body{background:radial-gradient(circle at top right,#2a123d,transparent 40%),var(--bg);color:#f7f4fc;margin:0}main{max-width:790px;margin:auto;padding:20px 16px 80px}header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:26px}header img{width:155px;max-width:50%}a{color:#e7baff}.back{font-size:13px}.pill{font-size:11px;border-radius:999px;padding:6px 9px;background:#402257;color:#f0ceff}h1{font-size:28px;margin:0 0 8px}p{line-height:1.5;color:var(--muted);font-size:14px}h2{font-size:18px;margin:0 0 14px}section{border:1px solid var(--edge);border-radius:18px;background:#111622;padding:18px;margin:15px 0}.muted{color:var(--muted);font-size:12px}.drop{display:block;border:2px dashed #75529c;border-radius:17px;background:#1a142b;padding:28px 16px;text-align:center;cursor:pointer}.drop strong{display:block;font-size:17px}.drop small{display:block;margin-top:7px;color:#c8b7da}input[type=file]{position:absolute;width:1px;height:1px;opacity:0}input,textarea,select{width:100%;border:1px solid #39465c;background:#080d19;color:#fff;border-radius:11px;padding:12px;font-size:16px;margin-top:6px}label.field{display:block;font-size:12px;font-weight:700;margin:12px 0 0}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px}.wide{grid-column:1/-1}button{border:0;border-radius:11px;padding:12px 15px;min-height:44px;background:linear-gradient(180deg,#b963f1,#7d27b3);color:white;font-weight:800;cursor:pointer;font-size:13px}button.secondary{background:#20283a;border:1px solid #44516a}button:disabled{opacity:.5;cursor:not-allowed}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}#preview{max-width:240px;max-height:310px;object-fit:contain;border-radius:12px;display:none;margin-top:14px;border:1px solid #50506b}#status{min-height:22px;color:#e7cbff;font-size:13px;line-height:1.45;margin-top:12px}.hidden{display:none}.result{border:1px solid #544265;border-radius:13px;padding:13px;margin-top:11px}.result b{font-size:14px}.result img{max-width:145px;max-height:180px;object-fit:contain;float:right;margin-left:12px;border-radius:9px}.warn{border-left:3px solid #f0c46a;padding-left:12px;color:#e7d4b8}.hint{font-size:12px;color:#b7a4d0}footer{margin-top:25px;color:#8190a8;font-size:11px}@media(max-width:520px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}}
-</style></head><body><main><header><img src="assets/gigrelay-wordmark.svg" alt="GigRelay"><a class="back" href="index.html">← Back to demo portal</a></header>
+</style><script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js" defer></script></head><body><main><header><img src="assets/gigrelay-wordmark.svg" alt="GigRelay"><a class="back" href="index.html">← Back to demo portal</a></header>
 <h1>Flyer Intake Lab <span class="pill">Demo only</span></h1>
 <p>Try the GigRelay workflow: select a flyer, experiment with text recognition, correct the details, then publish a <strong>local sample gig</strong>. No information is sent to the live BPE portal or Supabase.</p>
 <section><h2>1. Choose a flyer</h2>
@@ -51,12 +51,41 @@ selected=file;const reader=new FileReader();reader.onload=()=>{dataUrl=String(re
 });
 $("skip").addEventListener("click",showReview);
 $("read").addEventListener("click",async()=>{
-if(!selected)return;showReview();message("Loading experimental text recognition…");$("read").disabled=true;
-try{
- const mod=await import("https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.esm.min.js");
- const worker=await mod.createWorker("eng");try{const result=await worker.recognize(selected);$("raw").value=result.data.text||"";guess($("raw").value);message("Text recognition complete. Review every field before publishing.")}finally{await worker.terminate()}
-}catch(e){message("Automatic text recognition is unavailable in this browser right now. You can still enter and review details manually.")}
-finally{$("read").disabled=false}
+ if(!selected)return;
+ showReview();
+ const button=$("read");button.disabled=true;
+ const originalText=button.textContent;
+ button.textContent="Reading flyer…";
+ let worker;
+ try{
+   if(!window.Tesseract || typeof window.Tesseract.createWorker!=="function"){
+     throw new Error("Text reader did not load. Check your connection or content blockers, then reload.");
+   }
+   message("Loading English text recognition. First use may download language data…");
+   worker=await window.Tesseract.createWorker("eng",1,{
+     logger:m=>{
+       if(m.status==="recognizing text"&&typeof m.progress==="number"){
+         message("Reading flyer: "+Math.round(m.progress*100)+"%");
+       }else if(m.status) message("Reader: "+m.status);
+     }
+   });
+   const result=await worker.recognize(selected);
+   const text=String(result?.data?.text||"").trim();
+   $("raw").value=text;
+   if(!text){
+     message("Text reader completed, but found no words. The flyer may have stylized lettering or low contrast. Enter details manually or try a clearer picture.");
+   }else{
+     guess(text);
+     message("Read "+text.length+" characters. Check the recognized text below and review every field before publishing.");
+   }
+ }catch(e){
+   const detail=e instanceof Error?e.message:String(e);
+   message("Text reader failed: "+detail+". You can still enter details manually.");
+   console.error("GigRelay flyer OCR:",e);
+ }finally{
+   if(worker){try{await worker.terminate()}catch(e){console.warn("OCR cleanup:",e)}}
+   button.disabled=false;button.textContent=originalText;
+ }
 });
 $("derive").addEventListener("click",()=>guess($("raw").value));
 $("publish").addEventListener("click",()=>{
