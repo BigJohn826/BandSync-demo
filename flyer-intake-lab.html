@@ -10,7 +10,7 @@
 <label class="drop" for="flyer"><strong>Tap to choose a flyer</strong><small>JPG, PNG or WebP • maximum 10 MB</small></label><input id="flyer" type="file" accept="image/jpeg,image/png,image/webp">
 <img id="preview" alt="Selected flyer preview"><div class="actions"><button id="read" type="button" disabled>Try reading flyer text</button><button id="skip" class="secondary" type="button" disabled>Enter details manually</button></div>
 <p class="muted">Experimental browser-based text recognition may miss stylized fonts or misread event details. Check all dates, times and venues before publishing. If recognition is unavailable, manual review still works.</p><div id="status" role="status" aria-live="polite"></div></section>
-<section id="review" class="hidden"><h2>2. Review gig details</h2><p class="muted">Only information you verify here will be used. The flyer is attached to the sample entry.</p>
+<section id="review" class="hidden"><h2>2. Review gig details</h2><div id="reviewStatus" role="status" aria-live="polite" style="background:#261937;border:1px solid #745293;padding:12px;border-radius:12px;color:#f6e0ff;font-size:13px;line-height:1.45;margin-bottom:12px">Ready to review.</div><p class="muted">Only information you verify here will be used. The flyer is attached to the sample entry.</p>
 <div class="grid">
 <label class="field">Event date *<input id="date" type="date" required></label>
 <label class="field">Venue *<input id="venue" type="text" maxlength="200" placeholder="Venue name" required></label>
@@ -29,8 +29,8 @@
 const $=id=>document.getElementById(id), KEY="gigrelay-flyer-lab-v1";
 let selected=null,dataUrl="";
 const fields=["date","venue","start","end","location","arrival","attire","notes"];
-function message(v){$("status").textContent=v}
-function showReview(){ $("review").classList.remove("hidden");$("review").scrollIntoView({behavior:"smooth",block:"start"}) }
+function message(v){$("status").textContent=v;const second=$("reviewStatus");if(second)second.textContent=v}
+function showReview(scroll=true){ $("review").classList.remove("hidden");if(scroll)$("review").scrollIntoView({behavior:"smooth",block:"start"}) }
 function localDate(d){return /^\d{4}-\d{2}-\d{2}$/.test(d)&&!Number.isNaN(Date.parse(d+"T12:00:00Z"))}
 function escapeHtml(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function load(){try{return JSON.parse(localStorage.getItem(KEY)||"[]")}catch{return []}}
@@ -52,10 +52,12 @@ selected=file;const reader=new FileReader();reader.onload=()=>{dataUrl=String(re
 $("skip").addEventListener("click",showReview);
 $("read").addEventListener("click",async()=>{
  if(!selected)return;
- showReview();
+ showReview(false);
  const button=$("read");button.disabled=true;
  const originalText=button.textContent;
  button.textContent="Reading flyer…";
+ message("Starting flyer reader…");
+ $("review").scrollIntoView({behavior:"smooth",block:"start"});
  let worker;
  try{
    if(!window.Tesseract || typeof window.Tesseract.createWorker!=="function"){
