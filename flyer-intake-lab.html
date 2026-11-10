@@ -94,6 +94,18 @@ function guess(text){
      if(candidate&&candidate.length>=3&&candidate.length<=75&&!/\b(?:presents|doors|admission|tickets|pm|am)\b/i.test(candidate))put("venue",candidate,"venue");
    }
  }
+ if(!$("venue").value&&addressLine){
+   const addressIndex=lines.indexOf(addressLine);
+   const previous=addressIndex>0?lines[addressIndex-1]:"";
+   // An isolated line directly above a street address is often a venue.
+   if(previous&&previous.length>=4&&previous.length<=70
+     && !/\d/.test(previous)
+     && !/\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|tickets|admission|doors|present|music|live|dj|featuring|hosted|free|birthday)\b/i.test(previous)
+     && previous.split(/\s+/).length<=7){
+      put("venue",previous,"possible venue");
+      unresolved.push("venue name (suggested from line above address)");
+   }
+ }
  if(!$("venue").value)unresolved.push("venue");
  if(!$("location").value)unresolved.push("address");
  const note="Suggested: "+(filled.length?filled.join(", "):"no confident fields")+"."+(unresolved.length?" Please verify "+[...new Set(unresolved)].join(", ")+".":"")+" Review all information before publishing.";
