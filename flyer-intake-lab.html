@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#100b1b"><title>GigRelay | Flyer Intake Lab</title>
+<style>
+:root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color-scheme:dark;--purple:#ad53f0;--edge:#354058;--muted:#a3b2c7;--bg:#080912}
+*{box-sizing:border-box}body{background:radial-gradient(circle at top right,#2a123d,transparent 40%),var(--bg);color:#f7f4fc;margin:0}main{max-width:790px;margin:auto;padding:20px 16px 80px}header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:26px}header img{width:155px;max-width:50%}a{color:#e7baff}.back{font-size:13px}.pill{font-size:11px;border-radius:999px;padding:6px 9px;background:#402257;color:#f0ceff}h1{font-size:28px;margin:0 0 8px}p{line-height:1.5;color:var(--muted);font-size:14px}h2{font-size:18px;margin:0 0 14px}section{border:1px solid var(--edge);border-radius:18px;background:#111622;padding:18px;margin:15px 0}.muted{color:var(--muted);font-size:12px}.drop{display:block;border:2px dashed #75529c;border-radius:17px;background:#1a142b;padding:28px 16px;text-align:center;cursor:pointer}.drop strong{display:block;font-size:17px}.drop small{display:block;margin-top:7px;color:#c8b7da}input[type=file]{position:absolute;width:1px;height:1px;opacity:0}input,textarea,select{width:100%;border:1px solid #39465c;background:#080d19;color:#fff;border-radius:11px;padding:12px;font-size:16px;margin-top:6px}label.field{display:block;font-size:12px;font-weight:700;margin:12px 0 0}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px}.wide{grid-column:1/-1}button{border:0;border-radius:11px;padding:12px 15px;min-height:44px;background:linear-gradient(180deg,#b963f1,#7d27b3);color:white;font-weight:800;cursor:pointer;font-size:13px}button.secondary{background:#20283a;border:1px solid #44516a}button:disabled{opacity:.5;cursor:not-allowed}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}#preview{max-width:240px;max-height:310px;object-fit:contain;border-radius:12px;display:none;margin-top:14px;border:1px solid #50506b}#status{min-height:22px;color:#e7cbff;font-size:13px;line-height:1.45;margin-top:12px}.hidden{display:none}.result{border:1px solid #544265;border-radius:13px;padding:13px;margin-top:11px}.result b{font-size:14px}.result img{max-width:145px;max-height:180px;object-fit:contain;float:right;margin-left:12px;border-radius:9px}.warn{border-left:3px solid #f0c46a;padding-left:12px;color:#e7d4b8}.hint{font-size:12px;color:#b7a4d0}footer{margin-top:25px;color:#8190a8;font-size:11px}@media(max-width:520px){.grid{grid-template-columns:1fr}.wide{grid-column:auto}}
+</style></head><body><main><header><img src="assets/gigrelay-wordmark.svg" alt="GigRelay"><a class="back" href="index.html">← Back to demo portal</a></header>
+<h1>Flyer Intake Lab <span class="pill">Demo only</span></h1>
+<p>Try the GigRelay workflow: select a flyer, experiment with text recognition, correct the details, then publish a <strong>local sample gig</strong>. No information is sent to the live BPE portal or Supabase.</p>
+<section><h2>1. Choose a flyer</h2>
+<label class="drop" for="flyer"><strong>Tap to choose a flyer</strong><small>JPG, PNG or WebP • maximum 10 MB</small></label><input id="flyer" type="file" accept="image/jpeg,image/png,image/webp">
+<img id="preview" alt="Selected flyer preview"><div class="actions"><button id="read" type="button" disabled>Try reading flyer text</button><button id="skip" class="secondary" type="button" disabled>Enter details manually</button></div>
+<p class="muted">Experimental browser-based text recognition may miss stylized fonts or misread event details. Check all dates, times and venues before publishing. If recognition is unavailable, manual review still works.</p><div id="status" role="status" aria-live="polite"></div></section>
+<section id="review" class="hidden"><h2>2. Review gig details</h2><p class="muted">Only information you verify here will be used. The flyer is attached to the sample entry.</p>
+<div class="grid">
+<label class="field">Event date *<input id="date" type="date" required></label>
+<label class="field">Venue *<input id="venue" type="text" maxlength="200" placeholder="Venue name" required></label>
+<label class="field">Event or performance start<input id="start" placeholder="9:00 PM"></label>
+<label class="field">End<input id="end" placeholder="1:00 AM"></label>
+<label class="field wide">Location / address<input id="location" maxlength="300" placeholder="Street, city, state"></label>
+<label class="field">Arrival time<input id="arrival" placeholder="TBD"></label>
+<label class="field">Attire<input id="attire" maxlength="250" placeholder="TBD"></label>
+<label class="field wide">Notes<textarea id="notes" rows="3" maxlength="1500" placeholder="Performance time versus event hours, other acts, parking, etc."></textarea></label>
+<label class="field wide">Recognized text (reference only)<textarea id="raw" rows="5" placeholder="Recognized flyer text appears here. You can edit or paste text to help populate fields."></textarea></label>
+</div><div class="actions"><button id="derive" class="secondary" type="button">Suggest fields from text</button><button id="publish" type="button">Confirm &amp; publish sample gig</button></div></section>
+<section><h2>3. Sample gigs</h2><p class="muted">Saved only on this browser for testing; not shared with other band members or the actual calendar.</p><div id="samples"></div><div class="actions"><button id="clear" type="button" class="secondary">Clear sample gigs</button></div></section>
+<footer>GigRelay • Experimental Flyer Intake Lab • No production uploads</footer></main>
+<script>
+"use strict";
+const $=id=>document.getElementById(id), KEY="gigrelay-flyer-lab-v1";
+let selected=null,dataUrl="";
+const fields=["date","venue","start","end","location","arrival","attire","notes"];
+function message(v){$("status").textContent=v}
+function showReview(){ $("review").classList.remove("hidden");$("review").scrollIntoView({behavior:"smooth",block:"start"}) }
+function localDate(d){return /^\d{4}-\d{2}-\d{2}$/.test(d)&&!Number.isNaN(Date.parse(d+"T12:00:00Z"))}
+function escapeHtml(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function load(){try{return JSON.parse(localStorage.getItem(KEY)||"[]")}catch{return []}}
+function render(){const out=$("samples");const items=load();out.innerHTML=items.length?items.map(e=>'<article class="result">'+(e.image?'<img src="'+e.image+'" alt="Uploaded sample flyer">':"")+'<b>'+escapeHtml(e.date)+' — '+escapeHtml(e.venue)+'</b><p>'+escapeHtml([e.start,e.end].filter(Boolean).join(" – "))+'<br>'+escapeHtml(e.location)+'</p><p class="muted">'+escapeHtml(e.notes)+'</p><div style="clear:both"></div></article>').join(""):'<p class="muted">No sample gigs yet.</p>'}
+function guess(text){const t=text.replace(/\s+/g," ").trim();if(!t)return;
+const date=t.match(/\b(20\d{2})[-\/.](\d{1,2})[-\/.](\d{1,2})\b/)||null;
+if(date&&!$("date").value)$("date").value=date[1]+"-"+date[2].padStart(2,"0")+"-"+date[3].padStart(2,"0");
+const times=[...t.matchAll(/\b(?:1[0-2]|0?[1-9])(?::[0-5]\d)?\s*(?:AM|PM)\b/gi)].map(m=>m[0].toUpperCase().replace(/^(\d{1,2})(\s*AM|\s*PM)$/,"$1:00$2").replace(/\s*(AM|PM)$/," $1"));
+if(times[0]&&!$("start").value)$("start").value=times[0];
+if(times[1]&&!$("end").value)$("end").value=times[1];
+message("Text-based suggestions added where recognizable. Please check date, venue, times and location yourself.");
+}
+$("flyer").addEventListener("change",()=>{
+const file=$("flyer").files?.[0];selected=null;dataUrl="";$("preview").style.display="none";$("read").disabled=true;$("skip").disabled=true;
+if(!file)return;
+if(!["image/jpeg","image/png","image/webp"].includes(file.type)||file.size>10*1024*1024){message("Choose a JPG, PNG or WebP flyer no larger than 10 MB.");return}
+selected=file;const reader=new FileReader();reader.onload=()=>{dataUrl=String(reader.result);$("preview").src=dataUrl;$("preview").style.display="block";$("read").disabled=false;$("skip").disabled=false;message("Flyer selected. Try text recognition, or enter details manually.")};reader.readAsDataURL(file)
+});
+$("skip").addEventListener("click",showReview);
+$("read").addEventListener("click",async()=>{
+if(!selected)return;showReview();message("Loading experimental text recognition…");$("read").disabled=true;
+try{
+ const mod=await import("https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.esm.min.js");
+ const worker=await mod.createWorker("eng");try{const result=await worker.recognize(selected);$("raw").value=result.data.text||"";guess($("raw").value);message("Text recognition complete. Review every field before publishing.")}finally{await worker.terminate()}
+}catch(e){message("Automatic text recognition is unavailable in this browser right now. You can still enter and review details manually.")}
+finally{$("read").disabled=false}
+});
+$("derive").addEventListener("click",()=>guess($("raw").value));
+$("publish").addEventListener("click",()=>{
+if(!selected){message("Select a flyer first.");return}
+const e=Object.fromEntries(fields.map(k=>[k,$(k).value.trim()]));if(!localDate(e.date)||!e.venue){message("Enter a valid date and venue before publishing.");$("review").scrollIntoView();return}
+let items=load();const existing=items.find(x=>x.date===e.date&&x.venue.toLowerCase()===e.venue.toLowerCase());if(existing){message("A sample gig with this date and venue already exists. Existing flyer preserved.");return}
+e.image=dataUrl;e.created=Date.now();items.unshift(e);
+try{localStorage.setItem(KEY,JSON.stringify(items));message("Sample gig published locally with its flyer. Live BPE and Supabase were not changed.");render();$("samples").scrollIntoView({behavior:"smooth"})}catch{message("Browser storage is full or unavailable. Try a smaller image. Nothing was published.")}
+});
+$("clear").addEventListener("click",()=>{if(confirm("Remove all local sample gigs from this browser?")){localStorage.removeItem(KEY);render();message("Local sample gigs cleared.")}});
+render();
+</script></body></html>
