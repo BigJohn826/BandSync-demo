@@ -29,6 +29,7 @@
 const $=id=>document.getElementById(id), KEY="gigrelay-flyer-lab-v1";
 let selected=null,dataUrl="";
 const fields=["date","venue","start","end","location","arrival","attire","notes"];
+function clearReview(){for(const id of fields)$(id).value="";$("raw").value="";}
 function message(v){$("status").textContent=v;const second=$("reviewStatus");if(second)second.textContent=v}
 function showReview(scroll=true){ $("review").classList.remove("hidden");if(scroll)$("review").scrollIntoView({behavior:"smooth",block:"start"}) }
 function localDate(d){return /^\d{4}-\d{2}-\d{2}$/.test(d)&&!Number.isNaN(Date.parse(d+"T12:00:00Z"))}
@@ -113,7 +114,7 @@ function guess(text){
 }
 $("flyer").addEventListener("change",()=>{
 const file=$("flyer").files?.[0];selected=null;dataUrl="";$("preview").style.display="none";$("read").disabled=true;$("skip").disabled=true;
-if(!file)return;
+clearReview();if(!file){message("Select a flyer to begin.");return}
 if(!["image/jpeg","image/png","image/webp"].includes(file.type)||file.size>10*1024*1024){message("Choose a JPG, PNG or WebP flyer no larger than 10 MB.");return}
 selected=file;const reader=new FileReader();reader.onload=()=>{dataUrl=String(reader.result);$("preview").src=dataUrl;$("preview").style.display="block";$("read").disabled=false;$("skip").disabled=false;message("Flyer selected. Try text recognition, or enter details manually.")};reader.readAsDataURL(file)
 });
@@ -146,7 +147,8 @@ $("read").addEventListener("click",async()=>{
      message("Text reader completed, but found no words. The flyer may have stylized lettering or low contrast. Enter details manually or try a clearer picture.");
    }else{
      guess(text);
-     message("Read "+text.length+" characters. Check the recognized text below and review every field before publishing.");
+     const suggestions=$("status").textContent;
+     message("Read "+text.length+" characters. "+suggestions);
    }
  }catch(e){
    const detail=e instanceof Error?e.message:String(e);
